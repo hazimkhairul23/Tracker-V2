@@ -1,0 +1,25 @@
+{
+  "name": "Hazim IHEID Tracker",
+  "short_name": "Tracker",
+  "description": "IHEID study, clubs, thesis and career tracker",
+  "start_url": "/Tracker-V2/",
+  "scope": "/Tracker-V2/",
+  "display": "standalone",
+  "background_color": "#faf8f5",
+  "theme_color": "#1a1714",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

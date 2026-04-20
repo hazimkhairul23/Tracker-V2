@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hazim — IHEID Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tracker">
+<meta name="theme-color" content="#1a1714">
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink:#1a1714; --ink-2:#4a4540; --ink-3:#8a857f;
+  --paper:#faf8f5; --paper-2:#f2ede6; --paper-3:#e8e0d5;
+  --gold:#c9973a; --gold-light:#f5e8cc;
+  --red:#c0392b; --red-light:#fdecea;
+  --green:#2d6a4f; --green-light:#d8f3dc;
+  --blue:#1b4f72; --blue-light:#d6eaf8;
+  --amber:#ba7517; --amber-light:#faeeda;
+  --purple:#6b4fa0; --purple-light:#ede8f5;
+  --border:rgba(26,23,20,0.10); --border-2:rgba(26,23,20,0.18);
+  --r:8px; --rl:12px;
+}
+body { font-family:'DM Sans',sans-serif; background:var(--paper); color:var(--ink); min-height:100vh; font-size:14px; line-height:1.6; -webkit-overflow-scrolling:touch; overflow-x:hidden; }
+.app { display:flex; min-height:100vh; }
+
+/* SIDEBAR */
+.sidebar { width:260px; height:100vh; background:var(--ink); flex-shrink:0; display:flex; flex-direction:column; position:fixed; top:0; left:0; overflow-y:auto; overflow-x:hidden; padding-bottom:2rem; z-index:100; transition:transform 0.25s ease; -webkit-overflow-scrolling:touch; }
+.sidebar.hidden { transform:translateX(-260px); }
+.main { margin-left:260px; flex:1; padding:2rem 2.5rem; overflow-y:auto; min-height:100vh; }
+
+/* MOBILE TOPBAR */
+.mobile-topbar { display:none; background:var(--ink); color:#fff; padding:0.75rem 1rem; align-items:center; gap:12px; position:sticky; top:0; z-index:99; }
+.hamburger { background:none; border:none; color:#fff; font-size:20px; cursor:pointer; padding:4px; line-height:1; }
+.mobile-title { font-family:'Playfair Display',serif; font-size:15px; font-weight:500; }
+.mobile-date { font-size:11px; color:rgba(255,255,255,0.5); margin-left:auto; font-family:'DM Mono',monospace; }
+
+/* OVERLAY */
+.overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:99; }
+.overlay.show { display:block; }
+
+/* SIDEBAR SECTIONS — collapsible */
+.sb-section { border-bottom:1px solid rgba(255,255,255,0.07); }
+.sb-section-header { display:flex; align-items:center; justify-content:space-between; padding:0.7rem 1.5rem; cursor:pointer; transition:background 0.15s; user-select:none; }
+.sb-section-header:hover { background:rgba(255,255,255,0.04); }
+.sb-section-title { font-size:10px; letter-spacing:0.07em; text-transform:uppercase; color:rgba(255,255,255,0.35); font-weight:500; }
+.sb-section-arrow { font-size:10px; color:rgba(255,255,255,0.25); transition:transform 0.2s; }
+.sb-section-arrow.open { transform:rotate(90deg); }
+.sb-section-body { overflow:hidden; transition:max-height 0.25s ease; max-height:0; }
+.sb-section-body.open { max-height:400px; }
+
+.sb-header { padding:1.5rem 1.5rem 1rem; border-bottom:1px solid rgba(255,255,255,0.08); }
+.sb-logo { font-family:'Playfair Display',serif; font-size:17px; font-weight:500; color:#fff; margin-bottom:3px; }
+.sb-sub { font-size:11px; color:rgba(255,255,255,0.35); letter-spacing:0.05em; text-transform:uppercase; }
+.sb-date { padding:0.75rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08); }
+.sb-date-label { font-size:10px; text-transform:uppercase; letter-spacing:0.06em; color:rgba(255,255,255,0.35); margin-bottom:2px; }
+.sb-date-val { font-family:'Playfair Display',serif; font-size:17px; color:#fff; }
+.sb-date-day { font-size:11px; color:rgba(255,255,255,0.4); }
+.sb-streak { padding:0.6rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:8px; font-size:12px; color:rgba(255,255,255,0.4); }
+.sb-streak-num { font-family:'DM Mono',monospace; font-size:15px; color:var(--gold); }
+.sb-item { display:flex; align-items:center; gap:9px; padding:0.5rem 1.5rem; cursor:pointer; transition:background 0.15s; border-left:2px solid transparent; font-size:12.5px; color:rgba(255,255,255,0.55); }
+.sb-item:hover { background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.85); }
+.sb-item.active { background:rgba(201,151,58,0.15); border-left-color:var(--gold); color:#fff; font-weight:500; }
+.sb-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+.sb-badge { font-size:10px; font-family:'DM Mono',monospace; margin-left:auto; padding:1px 6px; border-radius:8px; }
+.sb-badge.red { background:rgba(192,57,43,0.35); color:#f1948a; }
+.sb-badge.amber { background:rgba(186,117,23,0.35); color:#f0b27a; }
+
+/* RESPONSIVE */
+@media(max-width:700px){
+  .sidebar { transform:translateX(-260px); }
+  .sidebar.open { transform:translateX(0); }
+  .main { margin-left:0; padding:1rem; }
+  .mobile-topbar { display:flex; }
+  .two-col,.three-col { grid-template-columns:1fr!important; }
+  .dl-grid { grid-template-columns:1fr 1fr; }
+}
+
+/* TOPBAR */
+.topbar { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.75rem; padding-bottom:1.5rem; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:1rem; }
+.page-title { font-family:'Playfair Display',serif; font-size:24px; font-weight:500; }
+.page-sub { font-size:13px; color:var(--ink-3); margin-top:2px; }
+
+/* CARDS */
+.card { background:#fff; border:1px solid var(--border); border-radius:var(--rl); padding:1.25rem; margin-bottom:1.25rem; }
+.card-title { font-family:'Playfair Display',serif; font-size:15px; font-weight:500; margin-bottom:1rem; display:flex; align-items:center; gap:8px; }
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
+.three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; }
+@media(max-width:900px) { .two-col,.three-col { grid-template-columns:1fr; } }
+
+/* DEADLINE CARDS */
+.dl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:10px; }
+.dl-card { padding:10px 12px; border-radius:var(--r); border:1px solid var(--border); background:var(--paper-2); cursor:pointer; transition:transform 0.15s,box-shadow 0.15s; }
+.dl-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(26,23,20,0.08); }
+.dl-card .dc-src { font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-3); margin-bottom:3px; }
+.dl-card .dc-name { font-size:12px; font-weight:500; color:var(--ink); margin-bottom:5px; line-height:1.4; }
+.dl-card .dc-days { font-family:'DM Mono',monospace; font-size:11px; }
+.dl-card.urgent { border-color:var(--red); background:var(--red-light); }
+.dl-card.urgent .dc-days { color:var(--red); }
+.dl-card.soon { border-color:var(--gold); background:var(--gold-light); }
+.dl-card.soon .dc-days { color:var(--amber); }
+.dl-card.ok .dc-days { color:var(--green); }
+
+/* STAT CARDS */
+.stat-card { background:var(--paper-2); border-radius:var(--r); padding:1rem; text-align:center; }
+.stat-n { font-family:'Playfair Display',serif; font-size:28px; font-weight:500; color:var(--ink); }
+.stat-l { font-size:11px; color:var(--ink-3); margin-top:2px; }
+
+/* WEEKLY */
+.week-section { margin-bottom:1.25rem; }
+.week-day-label { font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-3); margin-bottom:6px; padding-left:2px; display:flex; align-items:center; gap:8px; }
+.week-day-label .today-badge { font-size:10px; padding:1px 8px; border-radius:10px; background:var(--gold); color:#fff; font-weight:500; text-transform:none; letter-spacing:0; }
+.week-task { display:flex; align-items:center; gap:10px; padding:8px 12px; border-radius:var(--r); border:1px solid var(--border); background:#fff; margin-bottom:5px; }
+.week-task-check { width:16px; height:16px; border:1.5px solid var(--border-2); border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:10px; transition:all 0.15s; }
+.week-task-check.done { background:var(--green); border-color:var(--green); color:#fff; }
+.week-task-name { flex:1; font-size:13px; }
+.week-task-name.done { text-decoration:line-through; color:var(--ink-3); }
+.week-task-src { font-size:10px; padding:1px 7px; border-radius:8px; font-weight:500; white-space:nowrap; }
+.week-task-src.course { background:var(--blue-light); color:var(--blue); }
+.week-task-src.club { background:var(--purple-light); color:var(--purple); }
+.week-task-src.career { background:var(--gold-light); color:#8a6520; }
+.week-task-src.thesis { background:var(--green-light); color:var(--green); }
+.week-task-del { background:none; border:none; cursor:pointer; color:var(--ink-3); font-size:15px; opacity:0; transition:opacity 0.1s; }
+.week-task:hover .week-task-del { opacity:1; }
+
+/* ADD WEEK TASK */
+.add-week-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.add-week-form input, .add-week-form select { font-family:'DM Sans',sans-serif; font-size:13px; padding:7px 11px; border:1px solid var(--border-2); border-radius:var(--r); background:var(--paper); color:var(--ink); outline:none; }
+.add-week-form input:focus, .add-week-form select:focus { border-color:var(--gold); }
+.add-week-form input[type="text"] { flex:1; min-width:140px; }
+
+/* TABS */
+.tabs { display:flex; gap:4px; margin-bottom:1.5rem; border-bottom:1px solid var(--border); }
+.tab { padding:7px 16px; font-size:13px; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; color:var(--ink-3); transition:all 0.15s; }
+.tab:hover { color:var(--ink); }
+.tab.active { border-bottom-color:var(--gold); color:var(--ink); font-weight:500; }
+
+/* ASSIGNMENTS */
+.assign-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); }
+.assign-row:last-child { border-bottom:none; }
+.assign-check { width:17px; height:17px; border:1.5px solid var(--border-2); border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:10px; transition:all 0.15s; }
+.assign-check.done { background:var(--green); border-color:var(--green); color:#fff; }
+.assign-name { flex:1; font-size:13px; }
+.assign-name.done { text-decoration:line-through; color:var(--ink-3); }
+.assign-date { font-family:'DM Mono',monospace; font-size:11px; color:var(--ink-3); white-space:nowrap; }
+.assign-date.urgent { color:var(--red); font-weight:500; }
+.assign-date.soon { color:var(--amber); }
+.assign-del { background:none; border:none; cursor:pointer; color:var(--ink-3); font-size:15px; opacity:0; }
+.assign-row:hover .assign-del { opacity:1; }
+.inline-date { font-family:'DM Mono',monospace; font-size:11px; border:none; background:transparent; color:var(--ink-3); cursor:pointer; padding:0; outline:none; width:130px; }
+.inline-date:hover { color:var(--gold); }
+.inline-date:focus { color:var(--ink); border-bottom:1px solid var(--gold); }
+.inline-date.urgent { color:var(--red); }
+.inline-date.soon { color:var(--amber); }
+
+/* GRADES */
+.grade-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.grade-label { flex:1; font-size:13px; }
+.grade-weight { font-size:12px; color:var(--ink-3); width:36px; }
+.grade-input { width:68px; font-family:'DM Mono',monospace; font-size:13px; padding:5px 8px; border:1px solid var(--border-2); border-radius:6px; background:var(--paper); color:var(--ink); text-align:center; outline:none; }
+.grade-input:focus { border-color:var(--gold); }
+.gpa-big { font-family:'Playfair Display',serif; font-size:42px; font-weight:500; }
+
+/* NOTES */
+.note-area { width:100%; min-height:120px; font-family:'DM Sans',sans-serif; font-size:13px; padding:1rem; border:1px solid var(--border-2); border-radius:var(--r); background:var(--paper); color:var(--ink); resize:vertical; outline:none; line-height:1.7; }
+.note-area:focus { border-color:var(--gold); }
+.saved-note { padding:1rem; background:var(--paper-2); border-radius:var(--r); border-left:3px solid var(--gold); margin-bottom:8px; font-size:13px; line-height:1.7; white-space:pre-wrap; }
+.note-meta { font-size:11px; color:var(--ink-3); margin-bottom:5px; font-family:'DM Mono',monospace; }
+
+/* QUIZ */
+.upload-zone { border:2px dashed var(--border-2); border-radius:10px; padding:1.5rem; text-align:center; cursor:pointer; transition:all 0.2s; background:var(--paper-2); }
+.upload-zone:hover { border-color:var(--gold); background:var(--gold-light); }
+.quiz-q { padding:1rem; background:var(--paper-2); border-radius:var(--r); margin-bottom:10px; border-left:3px solid var(--gold); }
+.quiz-q p { font-weight:500; margin-bottom:0.65rem; line-height:1.5; font-size:13px; }
+.quiz-opt { display:flex; align-items:center; gap:9px; padding:7px 11px; border-radius:var(--r); border:1px solid var(--border); margin-bottom:5px; cursor:pointer; transition:all 0.15s; background:#fff; font-size:13px; }
+.quiz-opt:hover { border-color:var(--gold); background:var(--gold-light); }
+.quiz-opt.correct { border-color:var(--green); background:var(--green-light); }
+.quiz-opt.wrong { border-color:var(--red); background:var(--red-light); }
+.spinner { width:16px; height:16px; border:2px solid var(--gold); border-top-color:transparent; border-radius:50%; animation:spin 0.8s linear infinite; flex-shrink:0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* PROGRESS */
+.prog-bar { height:5px; background:var(--paper-3); border-radius:3px; overflow:hidden; margin-top:6px; }
+.prog-fill { height:100%; border-radius:3px; transition:width 0.4s; }
+
+/* CLUBS */
+.club-task-row { display:flex; align-items:flex-start; gap:10px; padding:9px 0; border-bottom:1px solid var(--border); }
+.club-task-row:last-child { border-bottom:none; }
+
+/* BTNS */
+.btn { font-family:'DM Sans',sans-serif; font-size:13px; padding:7px 16px; border-radius:var(--r); border:none; cursor:pointer; font-weight:500; transition:all 0.15s; }
+.btn-ink { background:var(--ink); color:#fff; }
+.btn-ink:hover { opacity:0.8; }
+.btn-gold { background:var(--gold); color:#fff; }
+.btn-gold:hover { opacity:0.85; }
+.btn-outline { background:transparent; border:1px solid var(--border-2); color:var(--ink-2); }
+.btn-outline:hover { background:var(--paper-2); }
+
+/* MISC */
+.label { font-size:11px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-3); font-weight:500; margin-bottom:7px; }
+.divider { height:1px; background:var(--border); margin:1rem 0; }
+.empty { text-align:center; padding:1.5rem; color:var(--ink-3); font-size:13px; }
+.add-form { display:flex; gap:8px; flex-wrap:wrap; margin-top:0.75rem; }
+.add-form input, .add-form select { font-family:'DM Sans',sans-serif; font-size:13px; padding:7px 11px; border:1px solid var(--border-2); border-radius:var(--r); background:var(--paper); color:var(--ink); outline:none; }
+.add-form input:focus, .add-form select:focus { border-color:var(--gold); }
+.add-form input[type="text"] { flex:1; min-width:140px; }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+<div class="mobile-topbar">
+  <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <span class="mobile-title">IHEID Tracker</span>
+  <span class="mobile-date" id="mobileDate"></span>
+</div>
+
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-header">
+    <div class="sb-logo">IHEID Tracker</div>
+    <div class="sb-sub">Ahmad Hazim · Spring 2026</div>
+  </div>
+  <div class="sb-date">
+    <div class="sb-date-label">Today</div>
+    <div class="sb-date-val" id="sbDate"></div>
+    <div class="sb-date-day" id="sbDay"></div>
+  </div>
+  <div class="sb-streak">
+    <span>🔥</span><span class="sb-streak-num" id="streakNum">0</span><span>day streak</span>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-overview')">
+      <span class="sb-section-title">Overview</span>
+      <span class="sb-section-arrow open" id="arrow-sec-overview">▶</span>
+    </div>
+    <div class="sb-section-body open" id="sec-overview">
+      <div class="sb-item active" onclick="nav('dashboard');closeSidebar()" id="nav-dashboard"><span class="sb-dot" style="background:var(--gold)"></span>Dashboard</div>
+      <div class="sb-item" onclick="nav('weekly');closeSidebar()" id="nav-weekly"><span class="sb-dot" style="background:var(--purple)"></span>This Week</div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-spring')">
+      <span class="sb-section-title">Spring 2026 Courses</span>
+      <span class="sb-section-arrow open" id="arrow-sec-spring">▶</span>
+    </div>
+    <div class="sb-section-body open" id="sec-spring">
+      <div class="sb-item" onclick="nav('c0');closeSidebar()" id="nav-c0"><span class="sb-dot" style="background:#c0392b"></span>MINT427 China<span class="sb-badge" id="badge-c0"></span></div>
+      <div class="sb-item" onclick="nav('c1');closeSidebar()" id="nav-c1"><span class="sb-dot" style="background:#1b4f72"></span>MINT502 Reset<span class="sb-badge" id="badge-c1"></span></div>
+      <div class="sb-item" onclick="nav('c2');closeSidebar()" id="nav-c2"><span class="sb-dot" style="background:#2d6a4f"></span>MINT464 Energy<span class="sb-badge" id="badge-c2"></span></div>
+      <div class="sb-item" onclick="nav('c3');closeSidebar()" id="nav-c3"><span class="sb-dot" style="background:#7d6608"></span>MINT504 SEA<span class="sb-badge" id="badge-c3"></span></div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-fall')">
+      <span class="sb-section-title">Fall 2026 Courses</span>
+      <span class="sb-section-arrow" id="arrow-sec-fall">▶</span>
+    </div>
+    <div class="sb-section-body" id="sec-fall">
+      <div class="sb-item" onclick="nav('f0');closeSidebar()" id="nav-f0"><span class="sb-dot" style="background:var(--ink-3)"></span>Course 1 (TBC)</div>
+      <div class="sb-item" onclick="nav('f1');closeSidebar()" id="nav-f1"><span class="sb-dot" style="background:var(--ink-3)"></span>Course 2 (TBC)</div>
+      <div class="sb-item" onclick="nav('f2');closeSidebar()" id="nav-f2"><span class="sb-dot" style="background:var(--ink-3)"></span>Course 3 (TBC)</div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-work')">
+      <span class="sb-section-title">Work & Internships</span>
+      <span class="sb-section-arrow open" id="arrow-sec-work">▶</span>
+    </div>
+    <div class="sb-section-body open" id="sec-work" id="work-sb-list">
+      <div class="sb-item" onclick="nav('work');closeSidebar()" id="nav-work"><span class="sb-dot" style="background:#1b4f72"></span>All Internships</div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-clubs')">
+      <span class="sb-section-title">Activities &amp; Clubs</span>
+      <span class="sb-section-arrow open" id="arrow-sec-clubs">▶</span>
+    </div>
+    <div class="sb-section-body open" id="sec-clubs">
+      <div class="sb-item" onclick="nav('club0');closeSidebar()" id="nav-club0"><span class="sb-dot" style="background:var(--purple)"></span>Geneva Debates</div>
+      <div class="sb-item" onclick="nav('club1');closeSidebar()" id="nav-club1"><span class="sb-dot" style="background:var(--red)"></span>TEDxGVAGrad</div>
+      <div class="sb-item" onclick="nav('club2');closeSidebar()" id="nav-club2"><span class="sb-dot" style="background:var(--green)"></span>GIIA</div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-section-header" onclick="toggleSection('sec-other')">
+      <span class="sb-section-title">Other</span>
+      <span class="sb-section-arrow open" id="arrow-sec-other">▶</span>
+    </div>
+    <div class="sb-section-body open" id="sec-other">
+      <div class="sb-item" onclick="nav('thesis');closeSidebar()" id="nav-thesis"><span class="sb-dot" style="background:var(--gold)"></span>Thesis</div>
+      <div class="sb-item" onclick="nav('career');closeSidebar()" id="nav-career"><span class="sb-dot" style="background:var(--amber)"></span>Career Tasks</div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div id="page-dashboard"></div>
+  <div id="page-weekly" style="display:none"></div>
+  <div id="page-c0" style="display:none"></div>
+  <div id="page-c1" style="display:none"></div>
+  <div id="page-c2" style="display:none"></div>
+  <div id="page-c3" style="display:none"></div>
+  <div id="page-f0" style="display:none"></div>
+  <div id="page-f1" style="display:none"></div>
+  <div id="page-f2" style="display:none"></div>
+  <div id="page-club0" style="display:none"></div>
+  <div id="page-club1" style="display:none"></div>
+  <div id="page-club2" style="display:none"></div>
+  <div id="page-thesis" style="display:none"></div>
+  <div id="page-career" style="display:none"></div>
+  <div id="page-work" style="display:none"></div>
+</main>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────────────────
+
+const SPRING_COURSES = [
+  { id:'c0', code:'MINT427', color:'#c0392b', name:'The China Syndrome', prof:'Prof. Yuan Zi', day:'Tuesday 16:15',
+    grades:[{label:'Class Participation',weight:20},{label:'Paper Presentation',weight:40},{label:'Essay',weight:40}],
+    topics:['Pre-1978 Development','Agriculture Reforms','Firm Reforms','Trade Reforms','FDI & Industry Policy','Hukou Migration','Population Policies','Education Policies'],
+    defaultAssign:[
+      {name:'Choose presentation paper',date:'2026-03-10',done:true},
+      {name:'Paper presentation',date:'2026-04-28',done:false},
+      {name:'Essay (5-10 pages)',date:'2026-05-30',done:false}
+    ]
+  },
+  { id:'c1', code:'MINT502', color:'#1b4f72', name:'The Reset', prof:'Prof. Francesco Pisano', day:'Thursday 16:15',
+    grades:[{label:'Participation & Interactions',weight:40},{label:'Group Presentation',weight:30},{label:'Final Essay 1500-2000w',weight:30}],
+    topics:['Genesis of Global Organizations','Evolution of Multilateralism','Future Foresight 2050','Co-creation Lab','Social & Economic Dimensions','Foresight Presentations','Debate Session'],
+    defaultAssign:[
+      {name:'Group prototype refinement (ongoing)',date:'2026-04-30',done:false},
+      {name:'Group foresight presentation',date:'2026-04-30',done:false},
+      {name:'Final essay (1500-2000 words)',date:'2026-05-18',done:false},
+      {name:'Final debate session',date:'2026-05-21',done:false}
+    ]
+  },
+  { id:'c2', code:'MINT464', color:'#2d6a4f', name:'Economics of Energy Transition', prof:'Prof. Imelda', day:'Wednesday',
+    grades:[{label:'Student-Led Discussion (Group)',weight:40},{label:'Literature Review',weight:40},{label:'Active Participation',weight:20}],
+    topics:['Electricity Regulation I & II','Renewable Integration','Policy Instruments Supply Side','Energy Efficiency Policies','Decarbonization in Transportation','Energy in Developing Countries'],
+    defaultAssign:[
+      {name:'Form groups',date:'2026-02-25',done:true},
+      {name:'Choose paper with TA',date:'2026-03-04',done:true},
+      {name:'Draft slides to TA',date:'2026-03-11',done:true},
+      {name:'Lit Review Pitch',date:'2026-04-30',done:true},
+      {name:'Literature Review — NO LATE SUBMISSIONS',date:'2026-05-13',done:false}
+    ]
+  },
+  { id:'c3', code:'MINT504', color:'#7d6608', name:'Southeast Asia in the World', prof:'Prof. Bernard Keo', day:'Check Moodle',
+    grades:[{label:'Participation',weight:25},{label:'Country Profile 1000w',weight:15},{label:'Research Essay 4000w',weight:40},{label:'Model ASEAN Summit + Reflection',weight:20}],
+    topics:['What is Southeast Asia?','Crucible of War','Merdeka','Hukbalahap Rebellion','Malayan Emergency','First Indochina War','SEAC','Bandung Moment','SEATO','ASEAN','Economic Cooperation','Asian Values','Model ASEAN Summit'],
+    defaultAssign:[
+      {name:'Country Profile (1000 words)',date:'2026-04-01',done:false},
+      {name:'Research Essay (4000 words)',date:'2026-05-20',done:false},
+      {name:'Model ASEAN Summit',date:'2026-05-14',done:false},
+      {name:'Reflection on ASEAN Summit (1500w)',date:'2026-05-21',done:false}
+    ]
+  }
+];
+
+const FALL_COURSES = [
+  { id:'f0', code:'FALL 1', color:'#5d6d7e', name:'Course 1', prof:'TBC', day:'TBC', grades:[], topics:[], defaultAssign:[] },
+  { id:'f1', code:'FALL 2', color:'#5d6d7e', name:'Course 2', prof:'TBC', day:'TBC', grades:[], topics:[], defaultAssign:[] },
+  { id:'f2', code:'FALL 3', color:'#5d6d7e', name:'Course 3', prof:'TBC', day:'TBC', grades:[], topics:[], defaultAssign:[] }
+];
+
+const WORK_DEFAULT = [
+  { id:'w0', color:'#1b4f72', name:'UNEP Finance Initiative – Risk Centre', role:'Intern', location:'Geneva, Switzerland', period:'Mar 2026 – Sept 2026',
+    defaultTasks:[
+      {name:'Climate risk framework deliverable — transition risk section',date:'2026-05-01',done:false},
+      {name:'Nature risk benchmarking report',date:'2026-05-15',done:false},
+      {name:'TCFD/ISSB disclosure alignment memo',date:'2026-06-01',done:false},
+      {name:'Final output for supervisor sign-off',date:'2026-09-01',done:false}
+    ]
+  },
+  { id:'w1', color:'#c9973a', name:'Vriens & Partners', role:'Consulting Intern', location:'Kuala Lumpur, Malaysia', period:'Jun 2026 – Aug 2026',
+    defaultTasks:[
+      {name:'Week 1-2: Read all Vriens published notes on Malaysia energy and regulatory landscape',date:'2026-06-12',done:false},
+      {name:'Week 3-6: Deliver first major client briefing to standard that makes supervisor look good',date:'2026-07-03',done:false},
+      {name:'Week 7-8: Request introductions to two GLC-adjacent external contacts',date:'2026-07-17',done:false},
+      {name:'Week 9-10: Signal long-term interest in energy sector to senior contact',date:'2026-07-24',done:false},
+      {name:'Week 11-12: Confirm LinkedIn connections with all professionals met',date:'2026-08-14',done:false},
+      {name:'Week 11-12: Send thoughtful thank-you to supervisor and any partner who gave time',date:'2026-08-21',done:false},
+      {name:'Secure senior reference letter before last day',date:'2026-08-28',done:false}
+    ]
+  }
+];
+
+const CLUBS = [
+  { id:'club0', color:'#6b4fa0', name:'Geneva Debates', role:'Co-President',
+    defaultTasks:[
+      {name:'Send follow-up email to Marie-Caroline after cancellation apology',date:'2026-04-22',done:false,priority:'urgent'},
+      {name:'Schedule committee meeting for next semester restructure',date:'2026-04-28',done:false,priority:'soon'},
+      {name:'Lock motion deadline for Fall debate — 6 weeks before event',date:'2026-09-01',done:false,priority:'ok'},
+      {name:'Confirm funding before booking venue for Fall event',date:'2026-09-01',done:false,priority:'ok'},
+      {name:'Confirm events team for second term',date:'2026-05-10',done:false,priority:'soon'},
+      {name:'Organise online debate',date:'2026-11-15',done:false,priority:'ok'},
+      {name:'Organise in-person flagship debate',date:'2026-10-15',done:false,priority:'ok'}
+    ]
+  },
+  { id:'club1', color:'#c0392b', name:'TEDxGVAGrad', role:'Treasurer / Project Manager (pending)',
+    defaultTasks:[
+      {name:'Project Manager interview',date:'2026-04-28',done:false,priority:'urgent'},
+      {name:'Review budget for next event cycle',date:'2026-05-05',done:false,priority:'soon'},
+      {name:'Corporate sponsorship outreach — first batch',date:'2026-05-15',done:false,priority:'soon'},
+      {name:'Sponsor visibility packages — draft',date:'2026-06-01',done:false,priority:'ok'}
+    ]
+  },
+  { id:'club2', color:'#2d6a4f', name:'GIIA', role:'Executive, Business Development & Finance',
+    defaultTasks:[
+      {name:'Confirm mentorship project partnership with Geneva Sustainable Finance Association',date:'2026-05-01',done:false,priority:'soon'},
+      {name:'Budget prep for next GIIA event',date:'2026-05-15',done:false,priority:'ok'},
+      {name:'Corporate outreach for sponsorship — GIIA',date:'2026-05-20',done:false,priority:'ok'}
+    ]
+  }
+];
+
+const THESIS_TASKS = [
+  {name:'Register thesis title on Campus — deadline 11 Sept 2026',date:'2026-09-11',done:false,priority:'urgent'},
+  {name:'Confirm Prof Imelda supervision formally',date:'2026-05-01',done:true},
+  {name:'Prepare one-page ERIA research proposal for May meeting',date:'2026-05-01',done:false,priority:'urgent'},
+  {name:'Meet Prof Jusoh and wife at IKMAS — pitch ERIA affiliation',date:'2026-05-15',done:false,priority:'urgent'},
+  {name:'Begin literature review for thesis',date:'2026-09-15',done:false,priority:'ok'},
+  {name:'Thesis first draft chapter',date:'2026-11-01',done:false,priority:'ok'},
+  {name:'Submit thesis',date:'2027-05-01',done:false,priority:'ok'}
+];
+
+const CAREER_TASKS = [
+  {name:'Follow up with Jim (EY) — get application timeline in May',date:'2026-05-15',done:false,priority:'soon'},
+  {name:'See PwC contact in KL — discuss CP&I and E&P practices',date:'2026-06-15',done:false,priority:'soon'},
+  {name:'Submit EY-Parthenon application — watch for window opening',date:'2026-08-01',done:false,priority:'ok'},
+  {name:'Submit BCG application',date:'2026-08-01',done:false,priority:'ok'},
+  {name:'Submit Deloitte Strategy application',date:'2026-08-01',done:false,priority:'ok'},
+  {name:'Submit KPMG Infrastructure application',date:'2026-08-01',done:false,priority:'ok'},
+  {name:'Submit McKinsey application',date:'2026-08-01',done:false,priority:'ok'},
+  {name:'Start structured case prep — 30 min daily minimum',date:'2026-04-22',done:false,priority:'urgent'},
+  {name:'Register thesis on IHEID Campus system',date:'2026-09-11',done:false,priority:'ok'}
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+
+function load(){try{return JSON.parse(localStorage.getItem('hazim_tracker_v2')||'{}');}catch(e){return{};}}
+function save(){try{localStorage.setItem('hazim_tracker_v2',JSON.stringify(STATE));}catch(e){}}
+
+let STATE = load();
+
+// Init defaults
+[...SPRING_COURSES,...FALL_COURSES].forEach(c=>{
+  if(!STATE['assign_'+c.id]) STATE['assign_'+c.id]=JSON.parse(JSON.stringify(c.defaultAssign));
+  if(!STATE['grades_'+c.id]) STATE['grades_'+c.id]=c.grades.map(()=>'');
+  if(!STATE['notes_'+c.id]) STATE['notes_'+c.id]=[];
+  if(!STATE['quiz_'+c.id]) STATE['quiz_'+c.id]=[];
+});
+CLUBS.forEach(cl=>{
+  if(!STATE['club_'+cl.id]) STATE['club_'+cl.id]=JSON.parse(JSON.stringify(cl.defaultTasks));
+  if(!STATE['club_notes_'+cl.id]) STATE['club_notes_'+cl.id]=[];
+});
+if(!STATE.thesis) STATE.thesis=JSON.parse(JSON.stringify(THESIS_TASKS));
+if(!STATE.career) STATE.career=JSON.parse(JSON.stringify(CAREER_TASKS));
+if(!STATE.weekly) STATE.weekly=[];
+if(!STATE.streak) STATE.streak={count:0,lastDate:null};
+
+// Init work — use saved custom work list or default
+if(!STATE.workList) STATE.workList=JSON.parse(JSON.stringify(WORK_DEFAULT));
+STATE.workList.forEach(w=>{
+  if(!STATE['work_tasks_'+w.id]) STATE['work_tasks_'+w.id]=JSON.parse(JSON.stringify(w.defaultTasks||[]));
+  if(!STATE['work_notes_'+w.id]) STATE['work_notes_'+w.id]=[];
+});
+save();
+
+// ── UTILS ─────────────────────────────────────────────────────────────────────
+
+function today(){return new Date().toISOString().split('T')[0];}
+function daysUntil(d){if(!d)return null;const n=new Date();n.setHours(0,0,0,0);const t=new Date(d);t.setHours(0,0,0,0);return Math.round((t-n)/86400000);}
+function fmtDate(d){if(!d)return'';return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});}
+function urgencyCls(d,done){if(done)return'';const v=daysUntil(d);if(v===null)return'';if(v<=3)return'urgent';if(v<=10)return'soon';return'';}
+function daysText(d){const v=daysUntil(d);if(v===null)return'';if(v<0)return'Overdue';if(v===0)return'Today!';if(v===1)return'Tomorrow';return v+'d left';}
+
+// ── SIDEBAR TOGGLE ────────────────────────────────────────────────────────────
+
+function toggleSidebar(){
+  const sb=document.getElementById('sidebar');
+  const ov=document.getElementById('overlay');
+  sb.classList.toggle('open');
+  ov.classList.toggle('show');
+}
+
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function toggleSection(id){
+  const body=document.getElementById(id);
+  const arrow=document.getElementById('arrow-'+id);
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+// ── DATES & STREAK ────────────────────────────────────────────────────────────
+
+function updateDates(){
+  const now=new Date();
+  const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  document.getElementById('sbDate').textContent=`${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+  document.getElementById('sbDay').textContent=days[now.getDay()];
+  const md=document.getElementById('mobileDate');
+  if(md)md.textContent=`${now.getDate()} ${months[now.getMonth()].slice(0,3)}`;
+  const t=today();
+  if(STATE.streak.lastDate!==t){
+    const yest=new Date();yest.setDate(yest.getDate()-1);
+    const ys=yest.toISOString().split('T')[0];
+    if(STATE.streak.lastDate===ys)STATE.streak.count++;
+    else if(STATE.streak.lastDate!==t)STATE.streak.count=1;
+    STATE.streak.lastDate=t;save();
+  }
+  document.getElementById('streakNum').textContent=STATE.streak.count;
+  updateBadges();
+}
+
+function updateBadges(){
+  SPRING_COURSES.forEach(c=>{
+    const assigns=STATE['assign_'+c.id]||[];
+    const urgent=assigns.filter(a=>!a.done&&a.date&&daysUntil(a.date)<=7).length;
+    const el=document.getElementById('badge-'+c.id);
+    if(el){
+      if(urgent>0){el.textContent=urgent+'d';el.className='sb-badge red';}
+      else{el.textContent='';el.className='sb-badge';}
+    }
+  });
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+
+let currentPage='dashboard';
+let courseTabs={};
+
+function nav(page){
+  document.querySelectorAll('[id^="page-"]').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+page).style.display='block';
+  const ni=document.getElementById('nav-'+page);
+  if(ni)ni.classList.add('active');
+  currentPage=page;
+  if(page==='dashboard')renderDashboard();
+  else if(page==='weekly')renderWeekly();
+  else if(page.startsWith('c')||page.startsWith('f'))renderCourse(page);
+  else if(page.startsWith('club'))renderClub(page);
+  else if(page==='thesis')renderThesis();
+  else if(page==='career')renderCareer();
+  else if(page==='work')renderWork();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+
+function renderDashboard(){
+  const now=new Date();
+  const h=now.getHours();
+  const greeting=h<12?'morning':h<17?'afternoon':'evening';
+
+  // Collect all upcoming deadlines
+  const all=[];
+  SPRING_COURSES.forEach(c=>{
+    (STATE['assign_'+c.id]||[]).filter(a=>!a.done&&a.date).forEach(a=>{
+      all.push({src:c.code,color:c.color,name:a.name,date:a.date,days:daysUntil(a.date),page:'c'+SPRING_COURSES.indexOf(c)});
+    });
+  });
+  CLUBS.forEach(cl=>{
+    (STATE['club_'+cl.id]||[]).filter(a=>!a.done&&a.date).forEach(a=>{
+      all.push({src:cl.name,color:cl.color,name:a.name,date:a.date,days:daysUntil(a.date),page:cl.id});
+    });
+  });
+  (STATE.thesis||[]).filter(a=>!a.done&&a.date).forEach(a=>{
+    all.push({src:'Thesis',color:'#c9973a',name:a.name,date:a.date,days:daysUntil(a.date),page:'thesis'});
+  });
+  (STATE.career||[]).filter(a=>!a.done&&a.date).forEach(a=>{
+    all.push({src:'Career',color:'#ba7517',name:a.name,date:a.date,days:daysUntil(a.date),page:'career'});
+  });
+  (STATE.workList||[]).forEach(w=>{
+    (STATE['work_tasks_'+w.id]||[]).filter(a=>!a.done&&a.date).forEach(a=>{
+      all.push({src:w.name.split(' ')[0],color:w.color,name:a.name,date:a.date,days:daysUntil(a.date),page:'work'});
+    });
+  });
+  all.sort((a,b)=>a.days-b.days);
+  const upcoming=all.filter(d=>d.days>=0).slice(0,9);
+
+  const totalAssign=SPRING_COURSES.reduce((s,c)=>s+(STATE['assign_'+c.id]||[]).length,0);
+  const doneAssign=SPRING_COURSES.reduce((s,c)=>s+(STATE['assign_'+c.id]||[]).filter(a=>a.done).length,0);
+
+  document.getElementById('page-dashboard').innerHTML=`
+    <div class="topbar">
+      <div>
+        <div class="page-title">Good ${greeting}, Hazim</div>
+        <div class="page-sub">${now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · IHEID Geneva Spring 2026</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📅 Upcoming Deadlines</div>
+      ${upcoming.length===0?'<div class="empty">No upcoming deadlines — great!</div>':
+        `<div class="dl-grid">${upcoming.map(d=>{
+          const cls=d.days<=3?'urgent':d.days<=10?'soon':'ok';
+          const dt=d.days===0?'Due TODAY':d.days===1?'Tomorrow':`${d.days} days · ${fmtDate(d.date)}`;
+          return`<div class="dl-card ${cls}" onclick="nav('${d.page}')">
+            <div class="dc-src" style="color:${d.color}">${d.src}</div>
+            <div class="dc-name">${d.name}</div>
+            <div class="dc-days">${dt}</div>
+          </div>`;
+        }).join('')}</div>`}
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">📊 Spring 2026 Progress</div>
+        ${SPRING_COURSES.map(c=>{
+          const assigns=STATE['assign_'+c.id]||[];
+          const done=assigns.filter(a=>a.done).length;
+          const total=assigns.length;
+          const pct=total>0?Math.round((done/total)*100):0;
+          return`<div style="margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:500">${c.code} — ${c.name}</span>
+              <span style="font-size:11px;color:var(--ink-3);font-family:'DM Mono',monospace">${done}/${total} · ${pct}%</span>
+            </div>
+            <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${c.color}"></div></div>
+          </div>`;
+        }).join('')}
+        <div class="divider"></div>
+        <div class="card-title" style="margin-top:0.5rem">🎪 Club Progress</div>
+        ${CLUBS.map(cl=>{
+          const tasks=STATE['club_'+cl.id]||[];
+          const done=tasks.filter(t=>t.done).length;
+          const total=tasks.length;
+          const pct=total>0?Math.round((done/total)*100):0;
+          return`<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:500">${cl.name}</span>
+              <span style="font-size:11px;color:var(--ink-3);font-family:'DM Mono',monospace">${done}/${total} · ${pct}%</span>
+            </div>
+            <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${cl.color}"></div></div>
+          </div>`;
+        }).join('')}
+        <div class="divider"></div>
+        <div class="card-title" style="margin-top:0.5rem">📄 Thesis & Career</div>
+        ${[
+          {label:'Thesis milestones',items:STATE.thesis||[],color:'#c9973a'},
+          {label:'Career tasks',items:STATE.career||[],color:'#ba7517'}
+        ].map(g=>{
+          const done=g.items.filter(t=>t.done).length;
+          const total=g.items.length;
+          const pct=total>0?Math.round((done/total)*100):0;
+          return`<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:500">${g.label}</span>
+              <span style="font-size:11px;color:var(--ink-3);font-family:'DM Mono',monospace">${done}/${total} · ${pct}%</span>
+            </div>
+            <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${g.color}"></div></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="card">
+        <div class="card-title">🎯 Quick Stats</div>
+        <div class="three-col" style="gap:8px">
+          <div class="stat-card"><div class="stat-n">${doneAssign}</div><div class="stat-l">tasks done</div></div>
+          <div class="stat-card"><div class="stat-n">${totalAssign-doneAssign}</div><div class="stat-l">remaining</div></div>
+          <div class="stat-card"><div class="stat-n">${STATE.streak.count}</div><div class="stat-l">day streak</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="label">Key Hard Deadlines</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          ${[
+            {name:'MINT464 Lit Review',date:'2026-05-13',red:true},
+            {name:'MINT502 Final Essay',date:'2026-05-18',red:false},
+            {name:'MINT504 Research Essay',date:'2026-05-20',red:false},
+            {name:'Thesis Registration Campus',date:'2026-09-11',red:false},
+          ].map(d=>{
+            const v=daysUntil(d.date);
+            const cls=v<=7?'urgent':v<=14?'soon':'';
+            return`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
+              <span>${d.name}</span>
+              <span class="assign-date ${cls}" style="font-size:11px">${fmtDate(d.date)} · ${daysText(d.date)}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">🎪 Club Activities</div>
+        ${CLUBS.map(cl=>{
+          const tasks=STATE['club_'+cl.id]||[];
+          const pending=tasks.filter(t=>!t.done&&t.date&&daysUntil(t.date)<=14).length;
+          return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('${cl.id}')">
+            <span style="width:8px;height:8px;border-radius:50%;background:${cl.color};flex-shrink:0"></span>
+            <span style="flex:1;font-size:13px;font-weight:500">${cl.name}</span>
+            <span style="font-size:11px;color:var(--ink-3)">${cl.role}</span>
+            ${pending>0?`<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:var(--amber-light);color:var(--amber)">${pending} due soon</span>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="card">
+        <div class="card-title">🗺 Career & Thesis</div>
+        ${[
+          {label:'ERIA proposal ready for May',done:(STATE.thesis||[]).find(t=>t.name.includes('ERIA'))?.done||false,page:'thesis'},
+          {label:'Jim follow-up (May)',done:(STATE.career||[]).find(t=>t.name.includes('Jim'))?.done||false,page:'career'},
+          {label:'Case prep started',done:(STATE.career||[]).find(t=>t.name.includes('case prep'))?.done||false,page:'career'},
+          {label:'Campus thesis registration',done:(STATE.thesis||[]).find(t=>t.name.includes('Campus'))?.done||false,page:'thesis'},
+        ].map(i=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('${i.page}')">
+          <span style="font-size:14px">${i.done?'✅':'⬜'}</span>
+          <span style="font-size:13px;${i.done?'text-decoration:line-through;color:var(--ink-3)':''}">${i.label}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+// ── WEEKLY ────────────────────────────────────────────────────────────────────
+
+function renderWeekly(){
+  const now=new Date();
+  const dow=now.getDay();
+  const monday=new Date(now);monday.setDate(now.getDate()-(dow===0?6:dow-1));monday.setHours(0,0,0,0);
+
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const dates=days.map((_,i)=>{const d=new Date(monday);d.setDate(monday.getDate()+i);return d;});
+
+  const allTasks=STATE.weekly||[];
+
+  document.getElementById('page-weekly').innerHTML=`
+    <div class="topbar">
+      <div>
+        <div class="page-title">This Week</div>
+        <div class="page-sub">${fmtDate(dates[0].toISOString().split('T')[0])} – ${fmtDate(dates[6].toISOString().split('T')[0])}</div>
+      </div>
+      <button class="btn btn-outline" onclick="clearDoneTasks()">Clear completed</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">➕ Add Task This Week</div>
+      <div class="add-week-form">
+        <input type="text" id="wtName" placeholder="Task description..." />
+        <select id="wtDay">
+          ${days.map((d,i)=>`<option value="${i}">${d}</option>`).join('')}
+        </select>
+        <select id="wtType">
+          <option value="course">Course</option>
+          <option value="club">Club</option>
+          <option value="career">Career</option>
+          <option value="thesis">Thesis</option>
+        </select>
+        <button class="btn btn-ink" onclick="addWeekTask()">Add</button>
+      </div>
+    </div>
+
+    ${days.map((day,di)=>{
+      const isToday=new Date().toDateString()===dates[di].toDateString();
+      const dayTasks=allTasks.filter(t=>t.dayIndex===di);
+
+      // Also pull course/club tasks due this specific date
+      const dateStr=dates[di].toISOString().split('T')[0];
+      const autoTasks=[];
+      SPRING_COURSES.forEach(c=>{
+        (STATE['assign_'+c.id]||[]).filter(a=>!a.done&&a.date===dateStr).forEach(a=>{
+          autoTasks.push({name:a.name,type:'course',src:c.code,auto:true});
+        });
+      });
+      CLUBS.forEach(cl=>{
+        (STATE['club_'+cl.id]||[]).filter(a=>!a.done&&a.date===dateStr).forEach(a=>{
+          autoTasks.push({name:a.name,type:'club',src:cl.name,auto:true});
+        });
+      });
+
+      if(dayTasks.length===0&&autoTasks.length===0&&!isToday)return'';
+
+      return`<div class="week-section">
+        <div class="week-day-label">${day} ${fmtDate(dateStr)} ${isToday?'<span class="today-badge">Today</span>':''}</div>
+        ${autoTasks.map(t=>`<div class="week-task">
+          <div class="week-task-check">–</div>
+          <div class="week-task-name">${t.name}</div>
+          <span class="week-task-src ${t.type}">${t.src}</span>
+        </div>`).join('')}
+        ${dayTasks.map((t,ti)=>`<div class="week-task">
+          <div class="week-task-check ${t.done?'done':''}" onclick="toggleWeekTask(${t.id})">${t.done?'✓':''}</div>
+          <div class="week-task-name ${t.done?'done':''}">${t.name}</div>
+          <span class="week-task-src ${t.type}">${t.type}</span>
+          <button class="week-task-del" onclick="deleteWeekTask(${t.id})">×</button>
+        </div>`).join('')}
+        ${isToday&&dayTasks.length===0&&autoTasks.length===0?'<div style="font-size:12px;color:var(--ink-3);padding:6px 0">Nothing added yet for today.</div>':''}
+      </div>`;
+    }).join('')}`;
+}
+
+function addWeekTask(){
+  const name=document.getElementById('wtName').value.trim();
+  const dayIndex=parseInt(document.getElementById('wtDay').value);
+  const type=document.getElementById('wtType').value;
+  if(!name)return;
+  if(!STATE.weekly)STATE.weekly=[];
+  STATE.weekly.push({id:Date.now(),name,dayIndex,type,done:false});
+  save();renderWeekly();
+}
+
+function toggleWeekTask(id){
+  const t=STATE.weekly.find(t=>t.id===id);
+  if(t)t.done=!t.done;
+  save();renderWeekly();
+}
+
+function deleteWeekTask(id){
+  STATE.weekly=STATE.weekly.filter(t=>t.id!==id);
+  save();renderWeekly();
+}
+
+function clearDoneTasks(){
+  STATE.weekly=STATE.weekly.filter(t=>!t.done);
+  save();renderWeekly();
+}
+
+// ── COURSE PAGE ───────────────────────────────────────────────────────────────
+
+function renderCourse(id){
+  const allC=[...SPRING_COURSES,...FALL_COURSES];
+  const c=allC.find(x=>x.id===id);
+  if(!c)return;
+  if(!courseTabs[id])courseTabs[id]='assignments';
+  const tab=courseTabs[id];
+
+  const el=document.getElementById('page-'+id);
+  el.innerHTML=`
+    <div class="topbar">
+      <div><div class="page-title">${c.name}</div><div class="page-sub">${c.code} · ${c.prof} · ${c.day}</div></div>
+    </div>
+    <div style="padding:1.25rem;background:var(--ink);border-radius:var(--rl);margin-bottom:1.25rem;color:#fff">
+      <div style="font-family:'Playfair Display',serif;font-size:18px;margin-bottom:6px">${c.name}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5)">${c.prof}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        ${c.grades.map((g,i)=>{
+          const v=(STATE['grades_'+id]||[])[i];
+          return`<div style="padding:3px 12px;border-radius:20px;font-size:11px;border:1px solid ${v?'var(--gold)':'rgba(255,255,255,0.15)'};background:${v?'rgba(201,151,58,0.2)':'transparent'};color:${v?'var(--gold)':'rgba(255,255,255,0.6)'}">
+            ${g.label} ${g.weight}%${v?' · '+v+'/6':''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab ${tab==='assignments'?'active':''}" onclick="switchTab('${id}','assignments')">Assignments</div>
+      <div class="tab ${tab==='grades'?'active':''}" onclick="switchTab('${id}','grades')">Grades</div>
+      <div class="tab ${tab==='notes'?'active':''}" onclick="switchTab('${id}','notes')">Notes</div>
+      <div class="tab ${tab==='quiz'?'active':''}" onclick="switchTab('${id}','quiz')">AI Quiz</div>
+    </div>
+    <div id="tabContent-${id}"></div>`;
+
+  renderTab(id,tab);
+}
+
+function switchTab(id,tab){courseTabs[id]=tab;renderCourse(id);}
+
+function renderTab(id,tab){
+  const allC=[...SPRING_COURSES,...FALL_COURSES];
+  const c=allC.find(x=>x.id===id);
+  const el=document.getElementById('tabContent-'+id);
+
+  if(tab==='assignments'){
+    const assigns=STATE['assign_'+id]||[];
+    const sorted=[...assigns.map((a,i)=>({...a,i}))].sort((a,b)=>{if(!a.date)return 1;if(!b.date)return-1;return new Date(a.date)-new Date(b.date);});
+    el.innerHTML=`<div class="card">
+      <div class="card-title">📋 Tasks</div>
+      <div id="alist-${id}">
+        ${sorted.length===0?'<div class="empty">No tasks yet.</div>':sorted.map(a=>{
+          const ucls=urgencyCls(a.date,a.done);
+          const daysTxt=a.date&&!a.done?' · '+daysText(a.date):'';
+          return`<div class="assign-row">
+            <div class="assign-check ${a.done?'done':''}" onclick="toggleAssign('${id}',${a.i})">${a.done?'✓':''}</div>
+            <div class="assign-name ${a.done?'done':''}">${a.name}</div>
+            <input type="date" class="inline-date ${ucls}" value="${a.date||''}" title="${daysTxt}" onchange="editAssignDate('${id}',${a.i},this.value)" />
+            <span style="font-size:10px;color:var(--ink-3);font-family:'DM Mono',monospace;white-space:nowrap">${daysTxt}</span>
+            <button class="assign-del" onclick="delAssign('${id}',${a.i})">×</button>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="divider"></div>
+      <div class="label">Add Task</div>
+      <div class="add-form">
+        <input type="text" id="an-${id}" placeholder="Task name..." />
+        <input type="date" id="ad-${id}" />
+        <button class="btn btn-ink" onclick="addAssign('${id}')">Add</button>
+      </div>
+    </div>`;
+
+  } else if(tab==='grades'){
+    const grades=STATE['grades_'+id]||c.grades.map(()=>'');
+    const gpa=calcGPA(id,c);
+    el.innerHTML=`<div class="two-col">
+      <div class="card">
+        <div class="card-title">📈 Grade Entry (IHEID scale 1–6)</div>
+        ${c.grades.length===0?'<div class="empty">No graded components defined yet.</div>':c.grades.map((g,i)=>`
+          <div class="grade-row">
+            <div class="grade-label">${g.label}</div>
+            <div class="grade-weight">${g.weight}%</div>
+            <input class="grade-input" type="number" min="1" max="6" step="0.25" value="${grades[i]||''}" placeholder="—" onchange="updateGrade('${id}',${i},this.value)" />
+          </div>`).join('')}
+      </div>
+      <div class="card" style="text-align:center">
+        <div class="card-title" style="justify-content:center">Projected GPA</div>
+        <div class="gpa-big" style="color:${c.color}">${gpa!==null?gpa.toFixed(2):'—'}</div>
+        <div style="font-size:12px;color:var(--ink-3)">out of 6.0</div>
+        ${gpa!==null?`<div style="height:6px;background:var(--paper-3);border-radius:3px;margin:1rem auto;max-width:160px;overflow:hidden"><div style="height:100%;width:${(gpa/6)*100}%;background:${c.color};border-radius:3px"></div></div>
+        <div style="font-size:12px;color:var(--ink-3)">${gpa>=5.5?'🏆 Distinction':gpa>=5.0?'✅ Strong':gpa>=4.5?'👍 Solid pass':'⚠️ Needs work'}</div>`:''}
+      </div>
+    </div>`;
+
+  } else if(tab==='notes'){
+    const notes=STATE['notes_'+id]||[];
+    el.innerHTML=`
+      <div class="card">
+        <div class="card-title">📝 Add Note</div>
+        <input type="text" id="nt-${id}" placeholder="Topic / Week (e.g. Week 4 — Renewable Integration)..." style="width:100%;font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 11px;border:1px solid var(--border-2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none;margin-bottom:8px">
+        <textarea class="note-area" id="nc-${id}" placeholder="Paste notes here..."></textarea>
+        <button class="btn btn-gold" style="margin-top:8px" onclick="saveNote('${id}')">Save Note</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📚 Saved Notes (${notes.length})</div>
+        ${notes.length===0?'<div class="empty">No notes yet.</div>':notes.slice().reverse().map((n,i)=>`
+          <div class="saved-note">
+            <div style="display:flex;justify-content:space-between">
+              <div class="note-meta">${n.title?n.title+' · ':''}${fmtDate(n.date)}</div>
+              <button onclick="delNote('${id}',${notes.length-1-i})" style="background:none;border:none;cursor:pointer;color:var(--ink-3)">×</button>
+            </div>
+            ${n.content}
+          </div>`).join('')}
+      </div>`;
+
+  } else if(tab==='quiz'){
+    el.innerHTML=`
+      <div class="card">
+        <div class="card-title">🤖 AI Quiz Generator</div>
+        <p style="font-size:13px;color:var(--ink-2);margin-bottom:1rem">Upload slides or paste notes. Claude generates questions on <strong>${c.name}</strong>.</p>
+        <div class="upload-zone" onclick="document.getElementById('fi-${id}').click()">
+          <div style="font-size:28px;margin-bottom:6px">📄</div>
+          <div style="font-size:13px;color:var(--ink-2)">Click to upload PDF / slides</div>
+          <div style="font-size:11px;color:var(--ink-3);margin-top:3px">or paste text below</div>
+        </div>
+        <input type="file" id="fi-${id}" style="display:none" accept=".pdf,.txt" onchange="handleFile(event,'${id}')" />
+        <div style="margin-top:1rem">
+          <div class="label">Or paste text directly</div>
+          <textarea class="note-area" id="qi-${id}" placeholder="Paste slide content or notes..." style="min-height:90px"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:1rem;flex-wrap:wrap">
+          <select id="qn-${id}" style="font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 11px;border:1px solid var(--border-2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none">
+            <option value="5">5 questions</option>
+            <option value="8" selected>8 questions</option>
+            <option value="12">12 questions</option>
+          </select>
+          <select id="qd-${id}" style="font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 11px;border:1px solid var(--border-2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none">
+            <option value="mixed">Mixed difficulty</option>
+            <option value="easy">Easy (recall)</option>
+            <option value="hard">Hard (analysis)</option>
+          </select>
+          <button class="btn btn-gold" onclick="genQuiz('${id}','${c.name}','${c.topics.join(',')}')">Generate Quiz ✦</button>
+          <button class="btn btn-outline" onclick="document.getElementById('qa-${id}').innerHTML=''">Clear</button>
+        </div>
+      </div>
+      <div id="qa-${id}"></div>`;
+  }
+}
+
+// Date edit functions
+function editAssignDate(id,i,v){STATE['assign_'+id][i].date=v;save();renderTab(id,courseTabs[id]||'assignments');}
+function editClubDate(id,i,v){STATE['club_'+id][i].date=v;save();renderClub(id);}
+function editThesisDate(i,v){STATE.thesis[i].date=v;save();renderThesis();}
+function editCareerDate(i,v){STATE.career[i].date=v;save();renderCareer();}
+
+// Assignment actions
+function toggleAssign(id,i){STATE['assign_'+id][i].done=!STATE['assign_'+id][i].done;save();renderTab(id,courseTabs[id]||'assignments');}
+function delAssign(id,i){STATE['assign_'+id].splice(i,1);save();renderTab(id,courseTabs[id]||'assignments');}
+function addAssign(id){
+  const n=document.getElementById('an-'+id).value.trim();
+  const d=document.getElementById('ad-'+id).value;
+  if(!n)return;
+  STATE['assign_'+id].push({name:n,date:d,done:false});
+  save();renderTab(id,'assignments');
+}
+function updateGrade(id,i,v){if(!STATE['grades_'+id])STATE['grades_'+id]=[];STATE['grades_'+id][i]=v;save();}
+function calcGPA(id,c){
+  const g=STATE['grades_'+id]||[];
+  let t=0,tw=0;
+  c.grades.forEach((gr,i)=>{const v=parseFloat(g[i]);if(!isNaN(v)&&v>=1&&v<=6){t+=v*gr.weight;tw+=gr.weight;}});
+  return tw>0?t/tw:null;
+}
+function saveNote(id){
+  const title=document.getElementById('nt-'+id).value.trim();
+  const content=document.getElementById('nc-'+id).value.trim();
+  if(!content)return;
+  if(!STATE['notes_'+id])STATE['notes_'+id]=[];
+  STATE['notes_'+id].push({title,content,date:today()});
+  save();renderTab(id,'notes');
+}
+function delNote(id,i){STATE['notes_'+id].splice(i,1);save();renderTab(id,'notes');}
+
+// ── CLUB PAGE ─────────────────────────────────────────────────────────────────
+
+function renderClub(id){
+  const cl=CLUBS.find(x=>x.id===id);
+  if(!cl)return;
+  const tasks=STATE['club_'+id]||[];
+  const notes=STATE['club_notes_'+id]||[];
+  const sorted=[...tasks.map((t,i)=>({...t,i}))].sort((a,b)=>{if(!a.date)return 1;if(!b.date)return-1;return new Date(a.date)-new Date(b.date);});
+
+  document.getElementById('page-'+id).innerHTML=`
+    <div class="topbar">
+      <div><div class="page-title">${cl.name}</div><div class="page-sub">${cl.role}</div></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+      <div class="card">
+        <div class="card-title">📋 Tasks & To-Dos</div>
+        ${sorted.length===0?'<div class="empty">No tasks yet.</div>':sorted.map(t=>{
+          const ucls=urgencyCls(t.date,t.done);
+          const daysTxt=t.date&&!t.done?' · '+daysText(t.date):'';
+          return`<div class="assign-row">
+            <div class="assign-check ${t.done?'done':''}" onclick="toggleClubTask('${id}',${t.i})">${t.done?'✓':''}</div>
+            <div class="assign-name ${t.done?'done':''}">${t.name}</div>
+            <input type="date" class="inline-date ${ucls}" value="${t.date||''}" onchange="editClubDate('${id}',${t.i},this.value)" />
+            <span style="font-size:10px;color:var(--ink-3);font-family:'DM Mono',monospace;white-space:nowrap">${daysTxt}</span>
+            <button class="assign-del" onclick="delClubTask('${id}',${t.i})">×</button>
+          </div>`;
+        }).join('')}
+        <div class="divider"></div>
+        <div class="label">Add Task</div>
+        <div class="add-form">
+          <input type="text" id="ctn-${id}" placeholder="Task..." />
+          <input type="date" id="ctd-${id}" />
+          <button class="btn btn-ink" onclick="addClubTask('${id}')">Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📝 Notes</div>
+        <textarea class="note-area" id="cna-${id}" placeholder="Notes, meeting minutes, ideas..."></textarea>
+        <button class="btn btn-gold" style="margin-top:8px" onclick="saveClubNote('${id}')">Save Note</button>
+        <div style="margin-top:1rem">
+          ${notes.length===0?'<div class="empty">No notes yet.</div>':notes.slice().reverse().map((n,i)=>`
+            <div class="saved-note">
+              <div style="display:flex;justify-content:space-between">
+                <div class="note-meta">${fmtDate(n.date)}</div>
+                <button onclick="delClubNote('${id}',${notes.length-1-i})" style="background:none;border:none;cursor:pointer;color:var(--ink-3)">×</button>
+              </div>
+              ${n.content}
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleClubTask(id,i){STATE['club_'+id][i].done=!STATE['club_'+id][i].done;save();renderClub(id);}
+function delClubTask(id,i){STATE['club_'+id].splice(i,1);save();renderClub(id);}
+function addClubTask(id){
+  const n=document.getElementById('ctn-'+id).value.trim();
+  const d=document.getElementById('ctd-'+id).value;
+  if(!n)return;
+  STATE['club_'+id].push({name:n,date:d,done:false,priority:'ok'});
+  save();renderClub(id);
+}
+function saveClubNote(id){
+  const content=document.getElementById('cna-'+id).value.trim();
+  if(!content)return;
+  STATE['club_notes_'+id].push({content,date:today()});
+  save();renderClub(id);
+}
+function delClubNote(id,i){STATE['club_notes_'+id].splice(i,1);save();renderClub(id);}
+
+// ── THESIS PAGE ───────────────────────────────────────────────────────────────
+
+function renderThesis(){
+  const tasks=STATE.thesis||[];
+  const sorted=[...tasks.map((t,i)=>({...t,i}))].sort((a,b)=>{if(!a.date)return 1;if(!b.date)return-1;return new Date(a.date)-new Date(b.date);});
+
+  document.getElementById('page-thesis').innerHTML=`
+    <div class="topbar">
+      <div><div class="page-title">Thesis</div><div class="page-sub">Energy Transition Financing Architectures: Malaysia & Indonesia · Prof. Imelda · IHEID 2026–2027</div></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">📋 Thesis Milestones</div>
+        ${sorted.map(t=>{
+          const ucls=urgencyCls(t.date,t.done);
+          const daysTxt=t.date&&!t.done?' · '+daysText(t.date):'';
+          return`<div class="assign-row">
+            <div class="assign-check ${t.done?'done':''}" onclick="toggleThesis(${t.i})">${t.done?'✓':''}</div>
+            <div class="assign-name ${t.done?'done':''}">${t.name}</div>
+            <input type="date" class="inline-date ${ucls}" value="${t.date||''}" onchange="editThesisDate(${t.i},this.value)" />
+            <span style="font-size:10px;color:var(--ink-3);font-family:'DM Mono',monospace;white-space:nowrap">${daysTxt}</span>
+            <button class="assign-del" onclick="delThesis(${t.i})">×</button>
+          </div>`;
+        }).join('')}
+        <div class="divider"></div>
+        <div class="label">Add Milestone</div>
+        <div class="add-form">
+          <input type="text" id="thn" placeholder="Milestone..." />
+          <input type="date" id="thd" />
+          <button class="btn btn-ink" onclick="addThesis()">Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📄 Research Details</div>
+        <div style="font-size:13px;line-height:1.8;color:var(--ink-2)">
+          <div style="margin-bottom:8px"><strong>Title:</strong> Energy Transition Financing Architectures: A Comparative Institutional Analysis of Malaysia and Indonesia</div>
+          <div style="margin-bottom:8px"><strong>Supervisor:</strong> Prof. Imelda (Energy Economics, IHEID)</div>
+          <div style="margin-bottom:8px"><strong>Methodology:</strong> Qualitative Comparative Institutional Analysis</div>
+          <div style="margin-bottom:8px"><strong>Cases:</strong> Malaysia & Indonesia (Japan as context only)</div>
+          <div style="margin-bottom:8px"><strong>ERIA Output:</strong> Working paper via IKMAS/UKM — pending May 2026 meeting</div>
+          <div style="margin-bottom:8px"><strong>Campus Deadline:</strong> Register by 11 September 2026</div>
+          <div><strong>Submission:</strong> May 2027</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleThesis(i){STATE.thesis[i].done=!STATE.thesis[i].done;save();renderThesis();}
+function delThesis(i){STATE.thesis.splice(i,1);save();renderThesis();}
+function addThesis(){
+  const n=document.getElementById('thn').value.trim();
+  const d=document.getElementById('thd').value;
+  if(!n)return;
+  STATE.thesis.push({name:n,date:d,done:false,priority:'ok'});
+  save();renderThesis();
+}
+
+// ── CAREER PAGE ───────────────────────────────────────────────────────────────
+
+function renderCareer(){
+  const tasks=STATE.career||[];
+  const sorted=[...tasks.map((t,i)=>({...t,i}))].sort((a,b)=>{if(!a.date)return 1;if(!b.date)return-1;return new Date(a.date)-new Date(b.date);});
+
+  document.getElementById('page-career').innerHTML=`
+    <div class="topbar">
+      <div><div class="page-title">Career Tasks</div><div class="page-sub">Applications, networking, and preparation milestones</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📋 Career To-Dos</div>
+      ${sorted.map(t=>{
+        const ucls=urgencyCls(t.date,t.done);
+        const daysTxt=t.date&&!t.done?' · '+daysText(t.date):'';
+        return`<div class="assign-row">
+          <div class="assign-check ${t.done?'done':''}" onclick="toggleCareer(${t.i})">${t.done?'✓':''}</div>
+          <div class="assign-name ${t.done?'done':''}">${t.name}</div>
+          <input type="date" class="inline-date ${ucls}" value="${t.date||''}" onchange="editCareerDate(${t.i},this.value)" />
+          <span style="font-size:10px;color:var(--ink-3);font-family:'DM Mono',monospace;white-space:nowrap">${daysTxt}</span>
+          <button class="assign-del" onclick="delCareer(${t.i})">×</button>
+        </div>`;
+      }).join('')}
+      <div class="divider"></div>
+      <div class="label">Add Task</div>
+      <div class="add-form">
+        <input type="text" id="carn" placeholder="Career task..." />
+        <input type="date" id="card" />
+        <button class="btn btn-ink" onclick="addCareer()">Add</button>
+      </div>
+    </div>`;
+}
+
+function toggleCareer(i){STATE.career[i].done=!STATE.career[i].done;save();renderCareer();}
+function delCareer(i){STATE.career.splice(i,1);save();renderCareer();}
+function addCareer(){
+  const n=document.getElementById('carn').value.trim();
+  const d=document.getElementById('card').value;
+  if(!n)return;
+  STATE.career.push({name:n,date:d,done:false,priority:'ok'});
+  save();renderCareer();
+}
+
+// ── QUIZ ──────────────────────────────────────────────────────────────────────
+
+let activeQuiz={};
+
+function handleFile(e,id){
+  const f=e.target.files[0];
+  if(f)document.getElementById('qi-'+id).value=`[File: ${f.name}] — paste content here or generate quiz based on ${f.name}`;
+}
+
+async function genQuiz(id,name,topics){
+  const input=document.getElementById('qi-'+id).value.trim();
+  const numQ=document.getElementById('qn-'+id).value;
+  const diff=document.getElementById('qd-'+id).value;
+  const area=document.getElementById('qa-'+id);
+  const content=input||`Generate questions about ${name} covering: ${topics}`;
+  const diffText=diff==='easy'?'factual recall':diff==='hard'?'analytical and critical thinking':'a mix of recall and analysis';
+
+  area.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:1rem;background:var(--gold-light);border-radius:var(--r);font-size:13px;color:var(--ink-2)"><div class="spinner"></div>Generating ${numQ} questions on ${name}...</div>`;
+
+  const prompt=`You are a university tutor for an IHEID Geneva master's student. Course: "${name}". Topics: ${topics}.
+
+Content: ${content}
+
+Generate exactly ${numQ} multiple choice questions. Focus on ${diffText}. Respond ONLY with valid JSON, no other text:
+{"questions":[{"q":"Question?","options":["A","B","C","D"],"correct":0,"explanation":"Why this is correct."}]}`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+    });
+    const data=await res.json();
+    const text=data.content?.[0]?.text||'';
+    const parsed=JSON.parse(text.replace(/```json|```/g,'').trim());
+    activeQuiz[id]={questions:parsed.questions,answers:{},revealed:{},submitted:false};
+    renderQuiz(id);
+  }catch(e){
+    area.innerHTML=`<div class="card" style="color:var(--red)">Failed to generate quiz. Check connection and try again.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function renderQuiz(id){
+  const quiz=activeQuiz[id];if(!quiz)return;
+  const area=document.getElementById('qa-'+id);
+  const answered=Object.keys(quiz.answers).length;
+  const correct=Object.keys(quiz.answers).filter(i=>quiz.answers[i]===quiz.questions[i].correct).length;
+
+  let html=`<div class="card"><div class="card-title">Quiz · ${answered}/${quiz.questions.length} answered${answered>0?' · '+correct+' correct':''}</div>`;
+  quiz.questions.forEach((q,qi)=>{
+    const sel=quiz.answers[qi]!==undefined?quiz.answers[qi]:null;
+    const rev=quiz.revealed[qi];
+    html+=`<div class="quiz-q"><p>${qi+1}. ${q.q}</p>
+      ${q.options.map((opt,oi)=>{
+        let cls='quiz-opt';
+        if(rev){if(oi===q.correct)cls+=' correct';else if(oi===sel&&sel!==q.correct)cls+=' wrong';}
+        return`<div class="${cls}" onclick="answerQ('${id}',${qi},${oi})">${opt}</div>`;
+      }).join('')}
+      ${rev?`<div style="margin-top:7px;font-size:12px;color:var(--ink-3);padding:8px;background:var(--paper-2);border-radius:6px">💡 ${q.explanation}</div>`:''}
+    </div>`;
+  });
+  if(answered===quiz.questions.length&&!quiz.submitted){
+    html+=`<button class="btn btn-gold" style="width:100%" onclick="submitQuiz('${id}')">Submit Quiz</button>`;
+  }
+  if(quiz.submitted){
+    const pct=Math.round((correct/quiz.questions.length)*100);
+    const cls=pct>=70?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
+    html+=`<div style="text-align:center;padding:1.5rem;background:var(--paper-2);border-radius:var(--r);margin-top:1rem">
+      <div style="font-family:'Playfair Display',serif;font-size:42px;color:${cls}">${pct}%</div>
+      <div style="font-size:13px;color:var(--ink-3);margin-top:4px">${correct}/${quiz.questions.length} correct</div>
+      <button class="btn btn-outline" style="margin-top:1rem" onclick="genQuiz('${id}')">New Quiz</button>
+    </div>`;
+  }
+  html+=`</div>`;
+  area.innerHTML=html;
+}
+
+function answerQ(id,qi,oi){
+  const quiz=activeQuiz[id];if(!quiz||quiz.submitted)return;
+  quiz.answers[qi]=oi;quiz.revealed[qi]=true;renderQuiz(id);
+}
+
+function submitQuiz(id){
+  const quiz=activeQuiz[id];if(!quiz)return;
+  const correct=Object.keys(quiz.answers).filter(i=>quiz.answers[i]===quiz.questions[i].correct).length;
+  const pct=Math.round((correct/quiz.questions.length)*100);
+  if(!STATE['quiz_'+id])STATE['quiz_'+id]=[];
+  STATE['quiz_'+id].push(pct);save();
+  quiz.submitted=true;renderQuiz(id);
+}
+
+// ── WORK PAGE ─────────────────────────────────────────────────────────────────
+
+function renderWork(){
+  const workList=STATE.workList||[];
+  const el=document.getElementById('page-work');
+
+  el.innerHTML=`
+    <div class="topbar">
+      <div><div class="page-title">Work & Internships</div><div class="page-sub">Ongoing and upcoming internships — tasks, notes, and deliverables</div></div>
+    </div>
+
+    ${workList.map(w=>{
+      const tasks=STATE['work_tasks_'+w.id]||[];
+      const notes=STATE['work_notes_'+w.id]||[];
+      const done=tasks.filter(t=>t.done).length;
+      const total=tasks.length;
+      const pct=total>0?Math.round((done/total)*100):0;
+      const sorted=[...tasks.map((t,i)=>({...t,i}))].sort((a,b)=>{if(!a.date)return 1;if(!b.date)return-1;return new Date(a.date)-new Date(b.date);});
+
+      return`<div class="card" style="border-left:4px solid ${w.color};margin-bottom:1.5rem">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-family:'Playfair Display',serif;font-size:17px;font-weight:500;color:var(--ink)">${w.name}</div>
+            <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${w.role} · ${w.location} · ${w.period}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-size:12px;color:var(--ink-3);font-family:'DM Mono',monospace">${done}/${total} · ${pct}%</div>
+            <div style="width:80px;height:5px;background:var(--paper-3);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${w.color};border-radius:3px"></div></div>
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div>
+            <div class="label">Tasks & Deliverables</div>
+            ${sorted.length===0?'<div class="empty">No tasks yet.</div>':sorted.map(t=>{
+              const ucls=urgencyCls(t.date,t.done);
+              const daysTxt=t.date&&!t.done?' · '+daysText(t.date):'';
+              return`<div class="assign-row">
+                <div class="assign-check ${t.done?'done':''}" onclick="toggleWorkTask('${w.id}',${t.i})">${t.done?'✓':''}</div>
+                <div class="assign-name ${t.done?'done':''}">${t.name}</div>
+                <input type="date" class="inline-date ${ucls}" value="${t.date||''}" onchange="editWorkDate('${w.id}',${t.i},this.value)" />
+                <span style="font-size:10px;color:var(--ink-3);font-family:'DM Mono',monospace;white-space:nowrap">${daysTxt}</span>
+                <button class="assign-del" onclick="delWorkTask('${w.id}',${t.i})">×</button>
+              </div>`;
+            }).join('')}
+            <div class="divider"></div>
+            <div class="add-form">
+              <input type="text" id="wtn-${w.id}" placeholder="Add task..." />
+              <input type="date" id="wtd-${w.id}" />
+              <button class="btn btn-ink" onclick="addWorkTask('${w.id}')">Add</button>
+            </div>
+          </div>
+          <div>
+            <div class="label">Notes & Observations</div>
+            <textarea class="note-area" id="wna-${w.id}" placeholder="Meeting notes, key contacts, observations..." style="min-height:100px"></textarea>
+            <button class="btn btn-gold" style="margin-top:8px;width:100%" onclick="saveWorkNote('${w.id}')">Save Note</button>
+            <div style="margin-top:1rem">
+              ${notes.length===0?'<div class="empty" style="padding:0.5rem 0">No notes yet.</div>':notes.slice().reverse().map((n,ni)=>`
+                <div class="saved-note">
+                  <div style="display:flex;justify-content:space-between">
+                    <div class="note-meta">${fmtDate(n.date)}</div>
+                    <button onclick="delWorkNote('${w.id}',${notes.length-1-ni})" style="background:none;border:none;cursor:pointer;color:var(--ink-3)">×</button>
+                  </div>
+                  ${n.content}
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div class="card" style="border:2px dashed var(--border-2)">
+      <div class="card-title">➕ Add New Internship or Work Experience</div>
+      <div class="add-form" style="flex-wrap:wrap">
+        <input type="text" id="wNewName" placeholder="Organisation name..." style="flex:2;min-width:200px" />
+        <input type="text" id="wNewRole" placeholder="Role / Title..." style="flex:1;min-width:140px" />
+        <input type="text" id="wNewLoc" placeholder="Location..." style="min-width:120px" />
+        <input type="text" id="wNewPeriod" placeholder="Period (e.g. Jun–Aug 2026)..." style="min-width:140px" />
+        <select id="wNewColor" style="font-family:'DM Sans',sans-serif;font-size:13px;padding:7px 11px;border:1px solid var(--border-2);border-radius:var(--r);background:var(--paper);color:var(--ink);outline:none">
+          <option value="#1b4f72">Blue</option>
+          <option value="#c9973a">Gold</option>
+          <option value="#2d6a4f">Green</option>
+          <option value="#c0392b">Red</option>
+          <option value="#6b4fa0">Purple</option>
+          <option value="#ba7517">Amber</option>
+        </select>
+        <button class="btn btn-gold" onclick="addWorkEntry()">Add Internship</button>
+      </div>
+    </div>`;
+}
+
+function toggleWorkTask(wid,i){STATE['work_tasks_'+wid][i].done=!STATE['work_tasks_'+wid][i].done;save();renderWork();}
+function delWorkTask(wid,i){STATE['work_tasks_'+wid].splice(i,1);save();renderWork();}
+function editWorkDate(wid,i,v){STATE['work_tasks_'+wid][i].date=v;save();renderWork();}
+function addWorkTask(wid){
+  const n=document.getElementById('wtn-'+wid).value.trim();
+  const d=document.getElementById('wtd-'+wid).value;
+  if(!n)return;
+  STATE['work_tasks_'+wid].push({name:n,date:d,done:false});
+  save();renderWork();
+}
+function saveWorkNote(wid){
+  const content=document.getElementById('wna-'+wid).value.trim();
+  if(!content)return;
+  STATE['work_notes_'+wid].push({content,date:today()});
+  save();renderWork();
+}
+function delWorkNote(wid,i){STATE['work_notes_'+wid].splice(i,1);save();renderWork();}
+function addWorkEntry(){
+  const name=document.getElementById('wNewName').value.trim();
+  const role=document.getElementById('wNewRole').value.trim();
+  const loc=document.getElementById('wNewLoc').value.trim();
+  const period=document.getElementById('wNewPeriod').value.trim();
+  const color=document.getElementById('wNewColor').value;
+  if(!name)return;
+  const id='w'+Date.now();
+  const entry={id,color,name,role:role||'Intern',location:loc||'TBC',period:period||'TBC',defaultTasks:[]};
+  STATE.workList.push(entry);
+  STATE['work_tasks_'+id]=[];
+  STATE['work_notes_'+id]=[];
+  save();renderWork();
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+
+updateDates();
+setInterval(updateDates,60000);
+nav('dashboard');
+</script>
+</body>
+</html>
