@@ -727,20 +727,6 @@ function renderDashboard(){
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📅 Upcoming Deadlines</div>
-      ${upcoming.length===0?'<div class="empty">No upcoming deadlines — great!</div>':
-        `<div class="dl-grid">${upcoming.map(d=>{
-          const cls=d.days<=3?'urgent':d.days<=10?'soon':'ok';
-          const dt=d.days===0?'Due TODAY':d.days===1?'Tomorrow':`${d.days} days · ${fmtDate(d.date)}`;
-          return`<div class="dl-card ${cls}" onclick="nav('${d.page}')">
-            <div class="dc-src" style="color:${d.color}">${d.src}</div>
-            <div class="dc-name">${d.name}</div>
-            <div class="dc-days">${dt}</div>
-          </div>`;
-        }).join('')}</div>`}
-    </div>
-
     <div class="two-col">
       <div class="card">
         <div class="card-title">📊 Course Progress</div>
@@ -886,8 +872,8 @@ function renderWeekly(){
 
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
   const dates=days.map((_,i)=>{const d=new Date(monday);d.setDate(monday.getDate()+i);return d;});
-
   const allTasks=STATE.weekly||[];
+  const todayIdx=dow===0?6:dow-1;
 
   document.getElementById('page-weekly').innerHTML=`
     <div class="topbar">
@@ -899,56 +885,40 @@ function renderWeekly(){
     </div>
 
     <div class="card">
-      <div class="card-title">➕ Add Task This Week</div>
+      <div class="card-title">➕ Add Task</div>
       <div class="add-week-form">
         <input type="text" id="wtName" placeholder="Task description..." />
         <select id="wtDay">
-          ${days.map((d,i)=>`<option value="${i}">${d}</option>`).join('')}
+          ${days.map((d,i)=>`<option value="${i}" ${i===todayIdx?'selected':''}>${d}</option>`).join('')}
         </select>
         <select id="wtType">
           <option value="course">Course</option>
           <option value="club">Club</option>
           <option value="career">Career</option>
           <option value="thesis">Thesis</option>
+          <option value="work">Work</option>
+          <option value="personal">Personal</option>
         </select>
         <button class="btn btn-ink" onclick="addWeekTask()">Add</button>
       </div>
     </div>
 
+    ${allTasks.length===0&&!allTasks.find(t=>!t.done)?`<div class="card"><div class="empty" style="padding:2rem">Nothing here yet — add tasks above and they will appear by day.</div></div>`:''}
+
     ${days.map((day,di)=>{
-      const isToday=new Date().toDateString()===dates[di].toDateString();
+      const isToday=di===todayIdx;
       const dayTasks=allTasks.filter(t=>t.dayIndex===di);
-
-      // Also pull course/club tasks due this specific date
+      if(dayTasks.length===0&&!isToday)return'';
       const dateStr=dates[di].toISOString().split('T')[0];
-      const autoTasks=[];
-      SPRING_COURSES.forEach(c=>{
-        (STATE['assign_'+c.id]||[]).filter(a=>!a.done&&a.date===dateStr).forEach(a=>{
-          autoTasks.push({name:a.name,type:'course',src:c.code,auto:true});
-        });
-      });
-      CLUBS.forEach(cl=>{
-        (STATE['club_'+cl.id]||[]).filter(a=>!a.done&&a.date===dateStr).forEach(a=>{
-          autoTasks.push({name:a.name,type:'club',src:cl.name,auto:true});
-        });
-      });
-
-      if(dayTasks.length===0&&autoTasks.length===0&&!isToday)return'';
-
       return`<div class="week-section">
-        <div class="week-day-label">${day} ${fmtDate(dateStr)} ${isToday?'<span class="today-badge">Today</span>':''}</div>
-        ${autoTasks.map(t=>`<div class="week-task">
-          <div class="week-task-check">–</div>
-          <div class="week-task-name">${t.name}</div>
-          <span class="week-task-src ${t.type}">${t.src}</span>
-        </div>`).join('')}
-        ${dayTasks.map((t,ti)=>`<div class="week-task">
-          <div class="week-task-check ${t.done?'done':''}" onclick="toggleWeekTask(${t.id})">${t.done?'✓':''}</div>
-          <div class="week-task-name ${t.done?'done':''}">${t.name}</div>
-          <span class="week-task-src ${t.type}">${t.type}</span>
-          <button class="week-task-del" onclick="deleteWeekTask(${t.id})">×</button>
-        </div>`).join('')}
-        ${isToday&&dayTasks.length===0&&autoTasks.length===0?'<div style="font-size:12px;color:var(--ink-3);padding:6px 0">Nothing added yet for today.</div>':''}
+        <div class="week-day-label">${day} <span style="font-weight:400;color:var(--ink-3)">${fmtDate(dateStr)}</span> ${isToday?'<span class="today-badge">Today</span>':''}</div>
+        ${dayTasks.length===0?`<div style="font-size:12px;color:var(--ink-3);padding:6px 0">Nothing added yet.</div>`
+          :dayTasks.map(t=>`<div class="week-task">
+            <div class="week-task-check ${t.done?'done':''}" onclick="toggleWeekTask(${t.id})">${t.done?'✓':''}</div>
+            <div class="week-task-name ${t.done?'done':''}">${t.name}</div>
+            <span class="week-task-src ${t.type}">${t.type}</span>
+            <button class="week-task-del" onclick="deleteWeekTask(${t.id})">×</button>
+          </div>`).join('')}
       </div>`;
     }).join('')}`;
 }
